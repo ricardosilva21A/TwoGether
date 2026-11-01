@@ -25,7 +25,7 @@ The project combines activity recommendations, personalized planning, a shared e
 
 ## Overview
 
-Nossia is a private web app for one shared couple account. Couples can collect date ideas, plan activities, save favourites and keep notes, ratings, and locations for dates they have experienced.
+Nossia is a private web app for couples, with a login for each partner. Couples can collect date ideas, plan activities, save favourites and keep notes, ratings, and locations for dates they have experienced.
 
 The first release stores a couple profile, date ideas, locations, and photo-album metadata in Supabase PostgreSQL. Supabase Auth protects the account, and database Row Level Security restricts records to that couple. Private photos are stored in Supabase Storage. OpenStreetMap powers date maps and place search.
 
@@ -40,14 +40,15 @@ The first release stores a couple profile, date ideas, locations, and photo-albu
 
 ## Available in this release
 
-- One shared account per couple, with both names and optional birthdays.
+- A couple space with both names and optional birthdays. The partner who signs up can create a single-use invite link (valid for 14 days) from the couple profile so the other partner gets their own login to the same dates, ideas and memories.
 - Required relationship anniversary and optional first-met, first-message, and first-date dates.
+- Edit the couple names and important dates from the profile button in the header, and upload a shared profile photo stored privately in Supabase Storage.
 - A prominent anniversary countdown and relationship-duration counter with a selectable days, months, or years metric. Anniversary planning starts with the couple's most common completed-date mood when available, then lets them refine the idea with Feeling.
 - An English/European Portuguese language switch in the app header; the selected language is remembered on the current device.
 - Shared date ideas, categories, favourites, and planned dates.
 - Add and edit date ideas, or permanently delete an idea and its attached stored photos.
 - Import date ideas from an `.xlsx` workbook or `.csv` file after reviewing valid ideas and rejected rows. Imports are limited to 2 MB and 200 data rows at a time.
-- A global default-idea catalog, loaded into each couple's private list while keeping favourites, plans, and memories couple-specific. Catalog uploads are restricted to the configured catalog administrator and support up to 5,000 ideas per file.
+- One shared idea catalog for every couple, plus private ideas each couple adds or imports. Favourites, plans and memories stay couple-specific, and planning an idea creates a separate date, so the same idea can be lived more than once. Catalog uploads are restricted to the configured catalog administrator and support up to 5,000 ideas per file.
 - A random date draw that chooses from unplanned ideas and prefers a different idea on each result.
 - Two recommendation modes: an instant random draw (up to three results per draw session) or an interactive, one-question-at-a-time Feeling flow matching mood, duration, budget, distance, and optional things to avoid. Matching ideas remain visible and update as answers change.
 - Date ideas include matching metadata for mood, duration in minutes, approximate budget for two, whether it can be done at home, and estimated one-way travel time.
@@ -161,8 +162,9 @@ Apply the SQL migrations, in filename order, from the [`supabase/migrations`](./
 4. [`20261014000000_shared_date_idea_catalog.sql`](./supabase/migrations/20261014000000_shared_date_idea_catalog.sql)
 5. [`20261014010000_weather_preferences.sql`](./supabase/migrations/20261014010000_weather_preferences.sql)
 6. [`20261014020000_saved_home_locations.sql`](./supabase/migrations/20261014020000_saved_home_locations.sql)
+7. [`20261016010000_couple_profile_photo.sql`](./supabase/migrations/20261016010000_couple_profile_photo.sql)
 
-The initial migration creates the couple profile and date-ideas tables, row-level access policies, and an Auth trigger that creates the couple profile from sign-up metadata. The second migration adds date coordinates, the private photo-albums table, the `date-photos` Storage bucket, and couple-scoped policies for photo records and files. The third adds the metadata used by Feeling recommendations. The fourth creates the shared default-idea catalog, its administrator-only write policies, and links existing starter ideas to their templates. The fifth adds saved weather coordinates and indoor/outdoor metadata. The sixth adds a private per-date marker for either partner's home. If migrations one through five have already been applied, apply only the new sixth migration.
+The initial migration creates the couple profile and date-ideas tables, row-level access policies, and an Auth trigger that creates the couple profile from sign-up metadata. The second migration adds date coordinates, the private photo-albums table, the `date-photos` Storage bucket, and couple-scoped policies for photo records and files. The third adds the metadata used by Feeling recommendations. The fourth creates the shared default-idea catalog, its administrator-only write policies, and links existing starter ideas to their templates. The fifth adds saved weather coordinates and indoor/outdoor metadata. The sixth adds a private per-date marker for either partner's home. The seventh adds the shared couple-profile photo path; it reuses the private `date-photos` bucket and its couple-scoped storage policies. If migrations one through six have already been applied, apply only the new seventh migration.
 
 To enable global catalog uploads for the app owner, set the `catalog_admin` flag in that owner's Supabase **app metadata**. Run this in the Supabase SQL Editor after replacing the email with the account's sign-in email:
 

@@ -456,3 +456,53 @@ h1{font-size:31px;line-height:1.2;margin-bottom:8px;color:#38312e}
   .feeling-choice-grid{grid-template-columns:1fr}
   .feeling-suggestions-panel{padding:11px}
 }
+
+.avatar-pair.has-photo,.top-avatar.has-photo{overflow:hidden;padding:0;letter-spacing:0}
+.avatar-pair img,.top-avatar img,.profile-photo-preview img{display:block;width:100%;height:100%;object-fit:cover}
+.top-avatar{border:0;cursor:pointer;flex:none}
+.profile-modal{width:min(100%,620px);max-height:calc(100dvh - 40px);overflow-y:auto;overscroll-behavior:contain}
+.profile-form{min-width:0}
+.profile-photo-row{display:flex;align-items:center;gap:14px;margin:14px 0;padding:13px;border:1px solid #f0eae5;border-radius:11px;background:#fff}
+.profile-photo-preview{width:64px;height:64px;flex:none;display:grid;place-items:center;overflow:hidden;border-radius:50%;background:#f0dedb;color:#9a565c;font-size:18px;font-weight:700;letter-spacing:-2px}
+.profile-photo-row>div{display:grid;justify-items:start;gap:5px;min-width:0}
+.profile-photo-row strong{font-size:11px;color:#514944}
+.profile-photo-row small{font-size:9px;color:#928983;line-height:1.4}
+.profile-photo-row .photo-upload-button{margin-top:3px;padding:8px 10px;font-size:9px}
+.profile-fields-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 13px}
+.profile-fields-grid .form-label{min-width:0;line-height:1.4}
+.profile-fields-grid .form-input{min-width:0}
+.profile-form>.modal-submit{margin-top:8px}
+.modal-backdrop{overflow-y:auto;overscroll-behavior:contain;align-items:center}
+.modal-card{max-height:calc(100dvh - 40px);overflow-y:auto;overscroll-behavior:contain}
+.idea-editor-modal{overflow:hidden}
+.draw-modal .draw-result{overflow-wrap:anywhere}
+.draw-modal .draw-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:760px){
+  .modal-backdrop{padding:12px}
+  .modal-card,.profile-modal{max-height:calc(100dvh - 24px)}
+  .feeling-modal{overflow-y:auto}
+  .feeling-layout{min-width:0}
+  .profile-modal{width:min(100%,620px)}
+  .topbar{gap:9px}
+  .topbar-right{gap:8px}
+}
+@media(max-width:540px){
+  .profile-fields-grid{grid-template-columns:1fr;gap:0}
+  .profile-photo-row{align-items:flex-start}
+  .draw-modal .draw-actions{grid-template-columns:1fr}
+  .draw-actions .modal-submit{grid-row:1}
+  .draw-result{padding:18px 14px}
+  .modal-card{padding:23px 18px}
+  .idea-editor-modal{padding:20px 17px}
+  .today-label{display:none}
+  .breadcrumb{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+@media(max-height:620px){
+  .modal-backdrop{place-items:start center}
+  .modal-card{margin:auto 0}
+  .modal-icon{margin-bottom:10px}
+  .draw-result{margin:10px 0;padding:14px}
+  .draw-emoji{width:58px;height:58px;font-size:31px;margin-bottom:8px}
+}
+.partner-access-row .profile-photo-preview{font-size:20px;letter-spacing:0}
+.invite-link-row{display:flex;gap:7px;width:100%;margin-top:3px}.invite-link-row .form-input{flex:1;min-width:0;margin:0;font-size:10px}.invite-link-row .photo-upload-button{margin-top:0}
