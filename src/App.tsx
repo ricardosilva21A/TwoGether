@@ -6,7 +6,9 @@ import { CalendarView, LocationSearch } from "./CalendarMap";
 import { CoupleCompanion } from "./CoupleCompanion";
 import { SchedulePanel, sharedFreeDays } from "./SchedulePanel";
 import { TodayView } from "./TodayView";
-import { ArrowRight, BarChart3, Bookmark, CalendarCheck, CalendarClock, CalendarDays, Check, Clock, Home, Images, Lightbulb, LogOut, MapPin, MoreHorizontal, Pencil, Plus, Search, Shuffle, SlidersHorizontal, Trash2, Upload } from "lucide-react";
+import { PlacesPanel } from "./PlacesPanel";
+import type { PlaceToPlan } from "./PlacesPanel";
+import { ArrowRight, BarChart3, Bookmark, CalendarCheck, CalendarClock, CalendarDays, Check, Clock, Home, Images, Lightbulb, LogOut, MapPin, MoreHorizontal, Pencil, Plus, Search, Shuffle, SlidersHorizontal, Trash2, Upload, UtensilsCrossed } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { WeatherPanel } from "./WeatherPanel";
 import { previewIdeaImport } from "./ideaImport";
@@ -15,7 +17,7 @@ import type { Category, CoupleDate, DateDetails, DateIdea, FeelingAnswers, Geoco
 import { activityWeatherAdvice, activityWeatherLabel, activityWeatherReason, weatherConditionFor, weatherEmoji, weatherLabel } from "./weather";
 import type { DailyWeather, WeatherCondition } from "./weather";
 
-type View = "today" | "discover" | "favorites" | "planned" | "memories" | "calendar" | "schedule" | "map" | "insights";
+type View = "today" | "discover" | "places" | "favorites" | "planned" | "memories" | "calendar" | "schedule" | "map" | "insights";
 type AuthMode = "sign-in" | "sign-up";
 type AuthFlow = AuthMode | "reset-request" | "password-update" | "join";
 type DiscoveryMode = "random" | "feeling";
@@ -68,6 +70,7 @@ const navItems: Array<{ view: View; Icon: LucideIcon }> = [
   { view: "discover", Icon: Lightbulb },
   { view: "planned", Icon: CalendarCheck },
   { view: "schedule", Icon: CalendarClock },
+  { view: "places", Icon: UtensilsCrossed },
   { view: "memories", Icon: Images },
   { view: "calendar", Icon: CalendarDays },
   { view: "favorites", Icon: Bookmark },
@@ -91,6 +94,8 @@ function viewFromPath(pathname: string): View {
     today: "today",
     dates: "discover",
     ideias: "discover",
+    sitios: "places",
+    places: "places",
     discover: "discover",
     planned: "planned",
     memories: "memories",
@@ -104,7 +109,7 @@ function viewFromPath(pathname: string): View {
 }
 
 function pathForView(view: View) {
-  return `/${view === "today" ? "hoje" : view === "discover" ? "dates" : view === "schedule" ? "agenda" : view}`;
+  return `/${view === "today" ? "hoje" : view === "discover" ? "dates" : view === "schedule" ? "agenda" : view === "places" ? "sitios" : view}`;
 }
 
 function translateImportMessage(language: Language, message: string) {
@@ -184,6 +189,7 @@ const emptyDateDetails: DateDetails = {
   latitude: null,
   longitude: null,
   home_partner: null,
+  place_id: null,
 };
 
 // Ideas that already have a date appear through that date instead, so completed ideas are
@@ -223,6 +229,7 @@ function buildDateIdeas(catalog: Idea[], dates: CoupleDate[], favoriteIdeaIds: S
       latitude: date.latitude,
       longitude: date.longitude,
       home_partner: date.home_partner,
+      place_id: date.place_id,
     }] : [];
   });
   const unplannedIdeas = catalog
@@ -1546,6 +1553,35 @@ function App() {
     return createDate(ideaId, { planned_for: date, planned_start_time: time || null });
   }
 
+  async function planAtPlace(place: PlaceToPlan, placeId: string, date: string, time: string) {
+    if (!supabase || !couple) return false;
+    let ideaId = catalog.find((idea) => idea.created_by_couple_id === couple.id && idea.title === place.name)?.id;
+    if (!ideaId) {
+      setBusy(true);
+      setDataError("");
+      const { data, error } = await supabase.from("ideas").insert({
+        created_by_couple_id: couple.id,
+        title: place.name,
+        description: place.address,
+        category: "Food & drink",
+        mood: place.kind === "bar" ? "Fun" : "Romantic",
+        duration: place.kind === "cafe" ? "1 hour" : "2 hours",
+        duration_minutes: place.kind === "cafe" ? 60 : 120,
+        budget: "To decide",
+        emoji: place.kind === "cafe" ? "☕" : place.kind === "bar" ? "🍸" : "🍽️",
+        weather_setting: "indoor",
+      }).select("*").single();
+      setBusy(false);
+      if (error) {
+        setDataError(language === "pt" ? `Não foi possível marcar o date: ${error.message}` : `We couldn't plan the date: ${error.message}`);
+        return false;
+      }
+      setCatalog((current) => [...current, data as Idea]);
+      ideaId = (data as Idea).id;
+    }
+    return createDate(ideaId, { planned_for: date, planned_start_time: time || null, location_name: place.name, latitude: place.latitude, longitude: place.longitude, place_id: placeId });
+  }
+
   async function createPartnerInvite() {
     if (!supabase) return;
     setBusy(true);
@@ -1580,6 +1616,7 @@ function App() {
     memories: ["Memórias", "Os dates que já fizeram, com notas e fotografias."],
     calendar: ["Calendário", "Dates planeados e memórias, mês a mês."],
     schedule: ["Agenda", "Horários, tarefas e o tempo livre que têm em comum."],
+    places: ["Sítios", "Restaurantes, cafés e bares para experimentar, e os que já são vossos."],
     map: ["Mapa", "Os sítios dos vossos dates."],
     insights: ["Estatísticas", "A vossa história em números e datas."],
   } : {
@@ -1590,12 +1627,13 @@ function App() {
     memories: ["Memories", "Dates you've done, with notes and photos."],
     calendar: ["Calendar", "Planned dates and memories, month by month."],
     schedule: ["Schedule", "Work hours, tasks and the free time you share."],
+    places: ["Places", "Restaurants, cafés and bars to try, and the ones that are already yours."],
     map: ["Map", "The places of your dates."],
     insights: ["Stats", "Your story in numbers and dates."],
   };
   const navLabels: Record<View, string> = language === "pt"
-    ? { today: "Hoje", discover: "Ideias", favorites: "Favoritos", planned: "Planeados", memories: "Memórias", calendar: "Calendário", schedule: "Agenda", map: "Mapa", insights: "Estatísticas" }
-    : { today: "Today", discover: "Ideas", favorites: "Favourites", planned: "Planned", memories: "Memories", calendar: "Calendar", schedule: "Schedule", map: "Map", insights: "Stats" };
+    ? { today: "Hoje", discover: "Ideias", favorites: "Favoritos", planned: "Planeados", memories: "Memórias", calendar: "Calendário", schedule: "Agenda", places: "Sítios", map: "Mapa", insights: "Estatísticas" }
+    : { today: "Today", discover: "Ideas", favorites: "Favourites", planned: "Planned", memories: "Memories", calendar: "Calendar", schedule: "Schedule", places: "Places", map: "Map", insights: "Stats" };
   const isGlobalImport = modal === "global-import";
   const localToday = new Date();
   const todayDate = `${localToday.getFullYear()}-${String(localToday.getMonth() + 1).padStart(2, "0")}-${String(localToday.getDate()).padStart(2, "0")}`;
@@ -1646,6 +1684,7 @@ function App() {
             onOpenIdeas={() => navigateView("discover")}
             onOpenPlanned={() => navigateView("planned")}
             onOpenAgenda={() => navigateView("schedule")}
+            onOpenPlaces={() => navigateView("places")}
           />}
           {view === "discover" && <>
             <section className="discovery-options" aria-label={language === "pt" ? "Escolher como encontrar um date" : "Choose how to find a date"}>
@@ -1693,6 +1732,7 @@ function App() {
           </div>}
 
           {view === "calendar" && <CalendarView ideas={visibleIdeas} language={language} />}
+          {view === "places" && <PlacesPanel couple={couple} mySlot={mySlot} dates={ideas} language={language} busy={busy} onPlan={planAtPlace} />}
           {view === "schedule" && <SchedulePanel couple={couple} mySlot={mySlot} plannedDates={plannedDates} blocks={workBlocks} onBlocksChange={setWorkBlocks} language={language} onFindDate={() => navigateView("discover")} />}
           {view === "map" && <Suspense fallback={<div className="map-loading">{language === "pt" ? "A abrir o mapa…" : "Opening the map…"}</div>}><LazyMapView
             ideas={visibleIdeas}
@@ -1724,7 +1764,7 @@ function App() {
               : <div className="insights-profile"><span className="section-kicker">{language === "pt" ? "O VOSSO PERFIL DE CASAL" : "YOUR COUPLE PROFILE"}</span><h2>{language === "pt" ? `São um casal ${completedMoodStats.top.map((stat) => ({ Romantic: "romântico", Fun: "divertido", Relaxing: "tranquilo", Adventure: "aventureiro", Creative: "criativo" })[stat.mood as Exclude<Mood, "Surprise me">]).join(" e ")}` : `You’re a ${completedMoodStats.top.map((stat) => stat.mood).join(" & ")} couple`}</h2><p>{language === "pt" ? `Com base nos vossos ${completedMoodStats.total} dates concluídos, estes são os vossos moods mais frequentes:` : `Based on your ${completedMoodStats.total} completed dates, you’ve shared these kinds of moments the most:`}</p><div className="insights-moods">{completedMoodStats.moods.map((stat) => <div className="insights-mood" key={stat.mood}><div><strong>{language === "pt" ? ({ Romantic: "Romântico", Fun: "Divertido", Relaxing: "Relaxante", Adventure: "Aventura", Creative: "Criativo", "Surprise me": "Surpreendam-nos" } as Record<Mood, string>)[stat.mood] : stat.mood}</strong><span>{stat.count} {language === "pt" ? stat.count === 1 ? "date" : "dates" : stat.count === 1 ? "date" : "dates"}</span></div><div className="insights-progress" aria-hidden="true"><span style={{ width: `${stat.count / completedMoodStats.total * 100}%` }} /></div></div>)}</div></div>}
           </section>}
 
-          {view !== "today" && view !== "calendar" && view !== "map" && view !== "insights" && view !== "schedule" && <section className="ideas-section">
+          {view !== "today" && view !== "places" && view !== "calendar" && view !== "map" && view !== "insights" && view !== "schedule" && <section className="ideas-section">
             <div className="section-heading"><div><p className="section-kicker">{view === "planned" ? language === "pt" ? "A CAMINHO" : "COMING UP" : view === "memories" ? language === "pt" ? "O VOSSO ÁLBUM" : "YOUR LITTLE ALBUM" : language === "pt" ? "ESCOLHIDO A PENSAR NOS DOIS" : "PICKED WITH THE TWO OF YOU IN MIND"}</p><h2>{view === "planned" ? language === "pt" ? "Os vossos próximos dates" : "Your upcoming dates" : view === "memories" ? language === "pt" ? "Momentos que viveram juntos" : "Moments you've shared" : view === "favorites" ? language === "pt" ? "Guardados com carinho" : "Saved with love" : language === "pt" ? "Ideias para desfrutarem juntos" : "Ideas to enjoy together"} <span className="heading-count">{visibleIdeas.length}</span></h2></div><label className="search-box"><Search size={16} aria-hidden="true" /><input aria-label={language === "pt" ? "Pesquisar ideias de date" : "Search date ideas"} placeholder={language === "pt" ? "Encontrar uma ideia..." : "Find an idea..."} value={search} onChange={(event) => setSearch(event.target.value)} /></label></div>
             <div className="filters" aria-label={language === "pt" ? "Filtrar por categoria" : "Filter by category"}>{categories.map((item) => <button key={item} className={`filter-chip ${category === item ? "selected" : ""}`} onClick={() => setCategory(item)}>{language === "pt" ? ({ All: "Todos", Romantic: "Romântico", Adventure: "Aventura", "Food & drink": "Comida e bebida", Creative: "Criativo", Relaxing: "Relaxante", Culture: "Cultura" } as Record<Category | "All", string>)[item] : item}</button>)}</div>
 
