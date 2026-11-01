@@ -4,15 +4,18 @@ import type { Session } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import { CalendarView, LocationSearch } from "./CalendarMap";
 import { CoupleCompanion } from "./CoupleCompanion";
-import { SchedulePanel } from "./SchedulePanel";
+import { SchedulePanel, sharedFreeDays } from "./SchedulePanel";
+import { TodayView } from "./TodayView";
+import { ArrowRight, BarChart3, Bookmark, CalendarCheck, CalendarClock, CalendarDays, Check, Clock, Home, Images, Lightbulb, LogOut, MapPin, MoreHorizontal, Pencil, Plus, Search, Shuffle, SlidersHorizontal, Trash2, Upload } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { WeatherPanel } from "./WeatherPanel";
 import { previewIdeaImport } from "./ideaImport";
 import type { ImportPreview } from "./ideaImport";
-import type { Category, CoupleDate, DateDetails, DateIdea, FeelingAnswers, GeocodedPlace, HomePartner, Idea, Mood, WeatherSetting } from "./types";
+import type { Category, CoupleDate, DateDetails, DateIdea, FeelingAnswers, GeocodedPlace, HomePartner, Idea, Mood, WeatherSetting, WorkScheduleBlock } from "./types";
 import { activityWeatherAdvice, activityWeatherLabel, activityWeatherReason, weatherConditionFor, weatherEmoji, weatherLabel } from "./weather";
 import type { DailyWeather, WeatherCondition } from "./weather";
 
-type View = "discover" | "favorites" | "planned" | "memories" | "calendar" | "schedule" | "map" | "insights";
+type View = "today" | "discover" | "favorites" | "planned" | "memories" | "calendar" | "schedule" | "map" | "insights";
 type AuthMode = "sign-in" | "sign-up";
 type AuthFlow = AuthMode | "reset-request" | "password-update" | "join";
 type DiscoveryMode = "random" | "feeling";
@@ -59,15 +62,17 @@ const authPaths: Record<AuthFlow, string> = {
   "password-update": "/update-password",
   join: initialInviteCode ? `/join/${initialInviteCode}` : "/signup",
 };
-const navItems: Array<{ view: View; label: string; icon: string }> = [
-  { view: "discover", label: "Date ideas", icon: "✳" },
-  { view: "planned", label: "Planned dates", icon: "▦" },
-  { view: "memories", label: "Our memories", icon: "⌁" },
-  { view: "calendar", label: "Calendar", icon: "▦" },
-  { view: "schedule", label: "Schedule", icon: "◴" },
-  { view: "favorites", label: "Our favourites", icon: "♡" },
-  { view: "map", label: "Date map", icon: "⌖" },
-  { view: "insights", label: "Our stats", icon: "◷" },
+// The first four are the phone's bottom bar; the rest sit under "More".
+const navItems: Array<{ view: View; Icon: LucideIcon }> = [
+  { view: "today", Icon: Home },
+  { view: "discover", Icon: Lightbulb },
+  { view: "planned", Icon: CalendarCheck },
+  { view: "schedule", Icon: CalendarClock },
+  { view: "memories", Icon: Images },
+  { view: "calendar", Icon: CalendarDays },
+  { view: "favorites", Icon: Bookmark },
+  { view: "map", Icon: MapPin },
+  { view: "insights", Icon: BarChart3 },
 ];
 
 function authFlowFromPath(pathname: string): AuthFlow {
@@ -81,7 +86,11 @@ function authFlowFromPath(pathname: string): AuthFlow {
 function viewFromPath(pathname: string): View {
   const route = pathname.replace(/^\/+|\/+$/g, "");
   const routes: Record<string, View> = {
+    "": "today",
+    hoje: "today",
+    today: "today",
     dates: "discover",
+    ideias: "discover",
     discover: "discover",
     planned: "planned",
     memories: "memories",
@@ -91,11 +100,11 @@ function viewFromPath(pathname: string): View {
     map: "map",
     insights: "insights",
   };
-  return routes[route] ?? "discover";
+  return routes[route] ?? "today";
 }
 
 function pathForView(view: View) {
-  return `/${view === "discover" ? "dates" : view === "schedule" ? "agenda" : view}`;
+  return `/${view === "today" ? "hoje" : view === "discover" ? "dates" : view === "schedule" ? "agenda" : view}`;
 }
 
 function translateImportMessage(language: Language, message: string) {
@@ -459,14 +468,14 @@ function AuthScreen({ language, onLanguageChange, initialMode, onModeChange, rec
   return (
     <div className="auth-shell">
       <aside className="auth-side">
-        <a className="brand" href="#"><span className="brand-mark">n<span>♡</span></span><span className="brand-name">nossia</span></a>
-        <div className="auth-quote"><span>✦ {language === "pt" ? "MAIS UM POUCO DE NÓS" : "A LITTLE MORE US"}</span><h1>{language === "pt" ? <>Criem tempo<br />para vocês.</> : <>Make time for<br />us.</>}</h1><p>{language === "pt" ? "Planeiem os dates. Guardem as memórias. Celebrem as pequenas coisas que fazem de vocês, vocês." : "Plan the dates. Keep the memories. Celebrate all the little things that make you, you."}</p><span className="auth-heart">♡</span></div>
-        <span className="auth-footer">{language === "pt" ? "FEITO COM CARINHO, PARA VOCÊS OS DOIS" : "MADE WITH LOVE, FOR THE TWO OF YOU"}</span>
+        <a className="brand" href="#"><span className="brand-mark">n</span><span className="brand-name">nossia</span></a>
+        <div className="auth-quote"><h1>{language === "pt" ? <>Criem tempo<br />para vocês.</> : <>Make time for<br />us.</>}</h1><p>{language === "pt" ? "Planeiem os dates. Guardem as memórias. Celebrem as pequenas coisas que fazem de vocês, vocês." : "Plan the dates. Keep the memories. Celebrate all the little things that make you, you."}</p></div>
+        
       </aside>
       <main className="auth-main">
         <div className="auth-card">
           <div className="auth-language-switch language-switch" role="group" aria-label={language === "pt" ? "Escolher idioma" : "Choose language"}><button type="button" className={language === "pt" ? "selected" : ""} aria-pressed={language === "pt"} onClick={() => onLanguageChange("pt")}>PT</button><button type="button" className={language === "en" ? "selected" : ""} aria-pressed={language === "en"} onClick={() => onLanguageChange("en")}>EN</button></div>
-          <p className="section-kicker">{mode === "join" ? language === "pt" ? "TENS UM CONVITE" : "YOU'RE INVITED" : mode === "sign-up" ? language === "pt" ? "O VOSSO CANTINHO" : "YOUR VERY OWN LITTLE CORNER" : mode === "reset-request" ? language === "pt" ? "RECUPERAR ACESSO" : "ACCOUNT RECOVERY" : mode === "password-update" ? language === "pt" ? "NOVA PALAVRA-PASSE" : "NEW PASSWORD" : language === "pt" ? "BEM-VINDOS DE VOLTA" : "WELCOME BACK, LOVEBIRDS"}</p>
+          <p className="section-kicker">{mode === "join" ? language === "pt" ? "TENS UM CONVITE" : "YOU'RE INVITED" : mode === "sign-up" ? language === "pt" ? "CRIAR CONTA" : "CREATE ACCOUNT" : mode === "reset-request" ? language === "pt" ? "RECUPERAR ACESSO" : "ACCOUNT RECOVERY" : mode === "password-update" ? language === "pt" ? "NOVA PALAVRA-PASSE" : "NEW PASSWORD" : language === "pt" ? "INICIAR SESSÃO" : "SIGN IN"}</p>
           <h2>{mode === "join" ? invite ? language === "pt" ? `${invite.partner_one_name} convidou-te para a Nossia` : `${invite.partner_one_name} invited you to Nossia` : language === "pt" ? "Convite para a Nossia" : "Your Nossia invite" : mode === "sign-up" ? language === "pt" ? "Comecem a vossa história juntos" : "Start your story together" : mode === "reset-request" ? language === "pt" ? "Esqueceram-se da palavra-passe?" : "Forgot your password?" : mode === "password-update" ? language === "pt" ? "Criem uma nova palavra-passe" : "Create a new password" : language === "pt" ? "É bom ter-vos de volta" : "Good to have you back"}</h2>
           <p className="auth-intro">{mode === "join" ? language === "pt" ? "Cria a tua própria conta. Os dates, ideias e memórias do casal ficam partilhados entre os dois." : "Create your own login. Your couple's dates, ideas and memories stay shared between you both." : mode === "sign-up" ? language === "pt" ? "Uma conta partilhada para os dois. As vossas memórias são só vossas." : "One shared account for the two of you. Your memories stay yours." : mode === "reset-request" ? language === "pt" ? "Indiquem o email da conta e enviamos uma ligação para redefinir a palavra-passe." : "Enter your account email and we’ll send a link to reset your password." : mode === "password-update" ? language === "pt" ? "Escolham uma palavra-passe com pelo menos 8 caracteres." : "Choose a password with at least 8 characters." : language === "pt" ? "Iniciem sessão e continuem de onde ficaram." : "Sign in to pick up right where the two of you left off."}</p>
           <form onSubmit={submit}>
@@ -532,6 +541,8 @@ function App() {
   const [favoriteIdeaIds, setFavoriteIdeaIds] = useState<Set<string>>(() => new Set());
   const [memberSlots, setMemberSlots] = useState<HomePartner[]>([]);
   const [mySlot, setMySlot] = useState<HomePartner | null>(null);
+  const [workBlocks, setWorkBlocks] = useState<WorkScheduleBlock[]>([]);
+  const [suggestionSeed, setSuggestionSeed] = useState(() => Math.floor(Math.random() * 1000));
   const [inviteLink, setInviteLink] = useState("");
   const [inviteError, setInviteError] = useState("");
   const [photos, setPhotos] = useState<DatePhoto[]>([]);
@@ -623,11 +634,12 @@ function App() {
     } else {
       setCouplePhotoUrl(null);
     }
-    const [{ rows: savedIdeas, error: ideasError }, { rows: savedDates, error: datesError }, { data: savedFavorites, error: favoritesError }, { data: savedMembers, error: membersError }] = await Promise.all([
+    const [{ rows: savedIdeas, error: ideasError }, { rows: savedDates, error: datesError }, { data: savedFavorites, error: favoritesError }, { data: savedMembers, error: membersError }, { data: savedBlocks }] = await Promise.all([
       loadAllRows<Idea>("ideas"),
       loadAllRows<CoupleDate>("couple_dates"),
       supabase.from("couple_idea_favorites").select("idea_id"),
       supabase.from("couple_members").select("partner_slot, user_id"),
+      supabase.from("work_schedule_blocks").select("*").order("weekday").order("starts_at"),
     ]);
     if (ideasError || datesError) {
       setCatalogAvailable(false);
@@ -641,6 +653,7 @@ function App() {
     setFavoriteIdeaIds(new Set((savedFavorites ?? []).map((favorite) => favorite.idea_id as string)));
     if (membersError) setDataError(language === "pt" ? `Não foi possível carregar as contas do casal: ${membersError.message}` : `We couldn't load your couple's accounts: ${membersError.message}`);
     setMemberSlots((savedMembers ?? []).map((member) => member.partner_slot as HomePartner));
+    setWorkBlocks((savedBlocks ?? []) as WorkScheduleBlock[]);
     setMySlot((savedMembers ?? []).find((member) => member.user_id === currentSession.user.id)?.partner_slot as HomePartner | undefined ?? null);
     const { data: savedPhotos, error: photosError } = await supabase.from("date_photos").select("*").order("created_at", { ascending: true });
     if (photosError) {
@@ -708,6 +721,7 @@ function App() {
         setFavoriteIdeaIds(new Set());
         setMemberSlots([]);
         setMySlot(null);
+        setWorkBlocks([]);
         setInviteLink("");
         setPhotos([]);
         setCatalogAvailable(false);
@@ -813,6 +827,14 @@ function App() {
   );
   const activeIdea = ideas.find((idea) => idea.id === activeIdeaId);
   const plannedDates = useMemo(() => ideas.filter((idea) => idea.status === "planned"), [ideas]);
+  const upcomingDates = useMemo(() => plannedDates.filter((date) => !date.planned_for || date.planned_for >= localDateString()).sort((first, second) =>
+    (first.planned_for ?? "9999").localeCompare(second.planned_for ?? "9999") || (first.planned_start_time ?? "").localeCompare(second.planned_start_time ?? "")), [plannedDates]);
+  const overdueDates = useMemo(() => plannedDates.filter((date) => date.planned_for && date.planned_for < localDateString()), [plannedDates]);
+  const freeDays = useMemo(() => sharedFreeDays(workBlocks, plannedDates), [plannedDates, workBlocks]);
+  const suggestion = useMemo(() => {
+    const pool = ideas.filter((idea) => idea.status === "idea");
+    return pool.length ? pool[suggestionSeed % pool.length] : null;
+  }, [ideas, suggestionSeed]);
   const activeIdeaWeatherAdvice = activeIdea ? activityWeatherAdvice(activeIdea, weatherForecast[0]) : null;
   const plannedDateForecast = plannedDate ? weatherForecast.find((day) => day.date === plannedDate) : undefined;
   const anniversary = couple ? nextAnniversary(couple.relationship_date) : null;
@@ -1493,6 +1515,37 @@ function App() {
     setBusy(false);
   }
 
+  // One step from a few words to a planned date: reuse an idea with the same title, or keep it as a private idea.
+  async function quickAddDate(title: string, date: string, time: string) {
+    if (!supabase || !couple) return false;
+    const normalized = title.toLocaleLowerCase("pt-PT");
+    let ideaId = catalog.find((idea) => idea.title.trim().toLocaleLowerCase("pt-PT") === normalized)?.id;
+    if (!ideaId) {
+      setBusy(true);
+      setDataError("");
+      const { data, error } = await supabase.from("ideas").insert({
+        created_by_couple_id: couple.id,
+        title,
+        description: "",
+        category: categoryForMood("Surprise me"),
+        mood: "Surprise me",
+        duration: "2 hours",
+        duration_minutes: 120,
+        budget: "To decide",
+        emoji: "📅",
+        weather_setting: "any",
+      }).select("*").single();
+      setBusy(false);
+      if (error) {
+        setDataError(language === "pt" ? `Não foi possível marcar o date: ${error.message}` : `We couldn't plan the date: ${error.message}`);
+        return false;
+      }
+      setCatalog((current) => [...current, data as Idea]);
+      ideaId = (data as Idea).id;
+    }
+    return createDate(ideaId, { planned_for: date, planned_start_time: time || null });
+  }
+
   async function createPartnerInvite() {
     if (!supabase) return;
     setBusy(true);
@@ -1518,130 +1571,129 @@ function App() {
     if (error) setDataError(`We couldn't sign you out: ${error.message}`);
   }
 
+  const todayHeading = new Intl.DateTimeFormat(language === "pt" ? "pt-PT" : "en-GB", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
   const pageHeading: Record<View, [string, string]> = language === "pt" ? {
-    discover: [`${couple?.partner_one_name} & ${couple?.partner_two_name}, o que vos apetece hoje?`, "Criem tempo para estarem juntos."],
-    favorites: ["Pequenos momentos especiais", "As ideias que guardaram para fazer juntos."],
-    planned: ["Há algo especial no calendário", "Os vossos próximos momentos, num só lugar."],
-    memories: ["Agora faz parte da vossa história", "Cada date é mais uma memória para guardar."],
-    calendar: ["Os vossos dates, dia a dia", "Vejam o que planearam e as memórias que criaram."],
-    schedule: ["A vossa semana", "Horários, tarefas e o tempo que têm para os dois."],
-    map: ["Todos os lugares por onde passaram", "Explore os lugares ligados aos vossos dates e memórias."],
-    insights: ["A vossa história", "Descubram o que os vossos dates dizem sobre aquilo que gostam de fazer juntos."],
+    today: [`Olá, ${couple?.partner_one_name} e ${couple?.partner_two_name}`, todayHeading],
+    discover: ["Ideias", "Escolham algo para fazer juntos, ou deixem a Nossia escolher."],
+    favorites: ["Favoritos", "As ideias que guardaram para mais tarde."],
+    planned: ["Planeados", "O que já está marcado."],
+    memories: ["Memórias", "Os dates que já fizeram, com notas e fotografias."],
+    calendar: ["Calendário", "Dates planeados e memórias, mês a mês."],
+    schedule: ["Agenda", "Horários, tarefas e o tempo livre que têm em comum."],
+    map: ["Mapa", "Os sítios dos vossos dates."],
+    insights: ["Estatísticas", "A vossa história em números e datas."],
   } : {
-    discover: [`${couple?.partner_one_name} & ${couple?.partner_two_name}, what do you feel like today?`, "Make time for us."],
-    favorites: ["Little things, lovely moments", "The ideas you saved to enjoy together."],
-    planned: ["Something lovely is on the calendar", "Your upcoming moments, all in one place."],
-    memories: ["It's part of your story now", "Every date you've shared is another memory to keep."],
-    calendar: ["Our dates, day by day", "See what you've planned and the memories you've made."],
-    schedule: ["Our week", "Work hours, tasks and the time you have for each other."],
-    map: ["All the places we've been", "Explore the places tied to your dates and memories."],
-    insights: ["The story of us", "See what your dates say about the things you love doing together."],
+    today: [`Hi, ${couple?.partner_one_name} and ${couple?.partner_two_name}`, todayHeading],
+    discover: ["Ideas", "Pick something to do together, or let Nossia choose."],
+    favorites: ["Favourites", "Ideas you saved for later."],
+    planned: ["Planned", "What's already on the calendar."],
+    memories: ["Memories", "Dates you've done, with notes and photos."],
+    calendar: ["Calendar", "Planned dates and memories, month by month."],
+    schedule: ["Schedule", "Work hours, tasks and the free time you share."],
+    map: ["Map", "The places of your dates."],
+    insights: ["Stats", "Your story in numbers and dates."],
   };
   const navLabels: Record<View, string> = language === "pt"
-    ? { discover: "Ideias de dates", favorites: "Favoritos", planned: "Dates planeados", memories: "Memórias", calendar: "Calendário", schedule: "Agenda", map: "Mapa", insights: "Estatísticas" }
-    : { discover: "Date ideas", favorites: "Our favourites", planned: "Planned dates", memories: "Our memories", calendar: "Calendar", schedule: "Schedule", map: "Date map", insights: "Our stats" };
+    ? { today: "Hoje", discover: "Ideias", favorites: "Favoritos", planned: "Planeados", memories: "Memórias", calendar: "Calendário", schedule: "Agenda", map: "Mapa", insights: "Estatísticas" }
+    : { today: "Today", discover: "Ideas", favorites: "Favourites", planned: "Planned", memories: "Memories", calendar: "Calendar", schedule: "Schedule", map: "Map", insights: "Stats" };
   const isGlobalImport = modal === "global-import";
   const localToday = new Date();
   const todayDate = `${localToday.getFullYear()}-${String(localToday.getMonth() + 1).padStart(2, "0")}-${String(localToday.getDate()).padStart(2, "0")}`;
 
-  if (!authReady) return <div className="loading-screen"><span className="brand-mark">n<span>♡</span></span><p>{language === "pt" ? "A abrir o vosso cantinho…" : "Opening your little corner…"}</p></div>;
+  if (!authReady) return <div className="loading-screen"><span className="brand-mark">n</span><p>{language === "pt" ? "A abrir…" : "Opening…"}</p></div>;
   if (passwordRecovery && session) return <AuthScreen language={language} initialMode="password-update" onModeChange={navigateAuth} recovery onRecoveryComplete={() => setPasswordRecovery(false)} onLanguageChange={changeLanguage} />;
   if (!session || !couple) return <><AuthScreen language={language} initialMode={authFlow} onModeChange={navigateAuth} onLanguageChange={changeLanguage} />{dataError && <p className="auth-global-error" role="alert">{dataError}</p>}</>;
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <a className="brand" href="/dates" onClick={(event) => { event.preventDefault(); navigateView("discover"); }} aria-label="Nossia home"><span className="brand-mark">n<span>♡</span></span><span className="brand-name">nossia</span></a>
+        <a className="brand" href="/hoje" onClick={(event) => { event.preventDefault(); navigateView("today"); }} aria-label="Nossia"><span className="brand-mark">n</span><span className="brand-name">nossia</span></a>
         <div className="couple-chip"><span className={`avatar-pair ${couplePhotoUrl ? "has-photo" : ""}`}>{couplePhotoUrl ? <img src={couplePhotoUrl} alt="" /> : <>{couple.partner_one_name.slice(0, 1)}<span>+</span>{couple.partner_two_name.slice(0, 1)}</>}</span><span>{couple.partner_one_name} & {couple.partner_two_name}</span><span className="online-dot" /></div>
-        <p className="nav-caption">{language === "pt" ? "O VOSSO ESPAÇO" : "YOUR SHARED SPACE"}</p>
         <nav className="side-nav" aria-label={language === "pt" ? "Navegação principal" : "Main navigation"}>
-          {navItems.map((item) => <button className={`nav-link ${view === item.view ? "active" : ""}`} key={item.view} onClick={() => { navigateView(item.view); setCategory("All"); setMobileMoreOpen(false); }}><span className="nav-icon">{item.icon}</span>{navLabels[item.view]}{item.view === "planned" && counts.planned > 0 && <span className="nav-count">{counts.planned}</span>}</button>)}
-          <button type="button" className={`mobile-more-button ${mobileMoreOpen ? "active" : ""}`} aria-expanded={mobileMoreOpen} onClick={() => setMobileMoreOpen((open) => !open)}><span className="nav-icon">···</span>{language === "pt" ? "Mais" : "More"}</button>
-          {mobileMoreOpen && <div className="mobile-more-menu">{navItems.slice(4).map((item) => <button type="button" key={item.view} className={view === item.view ? "active" : ""} onClick={() => { navigateView(item.view); setCategory("All"); setMobileMoreOpen(false); }}><span>{item.icon}</span>{navLabels[item.view]}</button>)}</div>}
+          {navItems.map((item) => <button className={`nav-link ${view === item.view ? "active" : ""}`} key={item.view} onClick={() => { navigateView(item.view); setCategory("All"); setMobileMoreOpen(false); }}><item.Icon className="nav-icon" size={19} strokeWidth={1.8} aria-hidden="true" />{navLabels[item.view]}{item.view === "planned" && counts.planned > 0 && <span className="nav-count">{counts.planned}</span>}</button>)}
+          <button type="button" className={`mobile-more-button ${mobileMoreOpen ? "active" : ""}`} aria-expanded={mobileMoreOpen} onClick={() => setMobileMoreOpen((open) => !open)}><MoreHorizontal className="nav-icon" size={19} strokeWidth={1.8} aria-hidden="true" />{language === "pt" ? "Mais" : "More"}</button>
+          {mobileMoreOpen && <div className="mobile-more-menu">{navItems.slice(4).map((item) => <button type="button" key={item.view} className={view === item.view ? "active" : ""} onClick={() => { navigateView(item.view); setCategory("All"); setMobileMoreOpen(false); }}><item.Icon size={18} strokeWidth={1.8} aria-hidden="true" />{navLabels[item.view]}</button>)}<button type="button" onClick={() => { setMobileMoreOpen(false); void signOut(); }}><LogOut size={18} strokeWidth={1.8} aria-hidden="true" />{language === "pt" ? "Terminar sessão" : "Sign out"}</button></div>}
         </nav>
-        <div className="sidebar-note"><span className="note-sparkle">✦</span><p>{language === "pt" ? "Os melhores planos são aqueles que fazem juntos." : "The best plans are the ones you make together."}</p><span>{language === "pt" ? "— um lembrete para hoje" : "— a little reminder for today"}</span></div>
-        <button className="sign-out-button" onClick={() => void signOut()}>{language === "pt" ? "Terminar sessão" : "Sign out"} <span>↗</span></button>
-        <div className="sidebar-bottom"><span className="tiny-heart">♥</span> {language === "pt" ? "Feito para vos aproximar" : "Made to bring you closer"}</div>
+        <button className="sign-out-button" onClick={() => void signOut()}><LogOut size={16} aria-hidden="true" />{language === "pt" ? "Terminar sessão" : "Sign out"}</button>
       </aside>
 
       <main className="main-area">
         <header className="topbar">
-          <div className="breadcrumb">{language === "pt" ? "O VOSSO ESPAÇO" : "YOUR SHARED SPACE"} <span>/</span> <strong>{navLabels[view].toLocaleUpperCase(language === "pt" ? "pt-PT" : "en-GB")}</strong></div>
           <div className="topbar-right"><span className="today-label">{new Intl.DateTimeFormat(language === "pt" ? "pt-PT" : "en-GB", { weekday: "long", day: "numeric", month: "long" }).format(new Date())}</span><div className="language-switch" role="group" aria-label={language === "pt" ? "Escolher idioma" : "Choose language"}><button type="button" className={language === "pt" ? "selected" : ""} aria-pressed={language === "pt"} onClick={() => changeLanguage("pt")}>PT</button><button type="button" className={language === "en" ? "selected" : ""} aria-pressed={language === "en"} onClick={() => changeLanguage("en")}>EN</button></div><button type="button" className={`top-avatar ${couplePhotoUrl ? "has-photo" : ""}`} onClick={openCoupleProfile} aria-label={language === "pt" ? "Editar perfil do casal" : "Edit couple profile"} title={language === "pt" ? "Editar perfil" : "Edit profile"}>{couplePhotoUrl ? <img src={couplePhotoUrl} alt="" /> : <>{couple.partner_one_name.slice(0, 1)}<span>{couple.partner_two_name.slice(0, 1)}</span></>}</button></div>
         </header>
 
         <div className="content">
-          <section className="welcome-row"><div><p className="eyebrow"><span /> {language === "pt" ? "MAIS UM POUCO DE NÓS" : "A LITTLE MORE US"}</p><h1>{pageHeading[view][0]}</h1><p className="welcome-copy">{pageHeading[view][1]}</p></div><div className="welcome-actions">{isCatalogAdmin && catalogAvailable && <button className="import-button global-import-button" onClick={() => openImport("global")}>{language === "pt" ? "Carregar ideias globais" : "Upload default ideas"}</button>}<button className="import-button" onClick={() => openImport("couple")}>{language === "pt" ? "Importar ideias" : "Import ideas"}</button><button className="add-button" onClick={openNewIdea}><span>＋</span> {language === "pt" ? "Nova ideia" : "New idea"}</button></div></section>
+          <section className="welcome-row"><div><h1>{pageHeading[view][0]}</h1><p className="welcome-copy">{pageHeading[view][1]}</p></div>{view === "discover" && <div className="welcome-actions">{isCatalogAdmin && catalogAvailable && <button className="button button-ghost" onClick={() => openImport("global")}>{language === "pt" ? "Carregar ideias globais" : "Upload default ideas"}</button>}<button className="button button-ghost" onClick={() => openImport("couple")}><Upload size={16} aria-hidden="true" />{language === "pt" ? "Importar" : "Import"}</button><button className="button button-primary" onClick={openNewIdea}><Plus size={16} aria-hidden="true" />{language === "pt" ? "Nova ideia" : "New idea"}</button></div>}</section>
 
           {dataError && <p className="data-alert" role="alert">{dataError}</p>}
 
+          {view === "today" && <TodayView
+            language={language}
+            upcomingDates={upcomingDates}
+            overdueCount={overdueDates.length}
+            freeDays={freeDays}
+            hasSchedule={workBlocks.length > 0}
+            suggestion={suggestion}
+            busy={busy}
+            anniversary={anniversary}
+            birthdays={personalBirthdays}
+            companion={<CoupleCompanion completedDates={completedStats.total} language={language} />}
+            weather={<WeatherPanel language={language} location={{ name: couple.weather_location_name, latitude: couple.weather_latitude, longitude: couple.weather_longitude, }} onSaveLocation={saveWeatherLocation} onConditionChange={onWeatherConditionChange} onForecastChange={onWeatherForecastChange} />}
+            onQuickAdd={quickAddDate}
+            onPlanSuggestion={(idea, date) => void createDate(idea.idea_id, { planned_for: date })}
+            onAnotherSuggestion={() => setSuggestionSeed((seed) => seed + 1 + Math.floor(Math.random() * 7))}
+            onMarkDone={(id) => void markCompleted(id)}
+            onOpenIdeas={() => navigateView("discover")}
+            onOpenPlanned={() => navigateView("planned")}
+            onOpenAgenda={() => navigateView("schedule")}
+          />}
           {view === "discover" && <>
-            <section className="feature-banner">
-              <div className="banner-copy"><span className="banner-kicker">NOSSIA · {language === "pt" ? "CRIEM TEMPO PARA VOCÊS" : "MAKE TIME FOR US"}</span><h2>{language === "pt" ? "Criem tempo para vocês." : "Make time for us."}</h2><p>{language === "pt" ? "O que vos apetece fazer hoje?" : "What do you feel like doing today?"}</p></div>
-              <div className="banner-art" aria-hidden="true"><span className="art-sun" /><span className="art-orbit orbit-one" /><span className="art-orbit orbit-two" /><span className="art-heart">♥</span><span className="art-caption">{language === "pt" ? "melhor, juntos" : "better, together"}</span></div><span className="banner-decoration">♡</span>
-            </section>
             <section className="discovery-options" aria-label={language === "pt" ? "Escolher como encontrar um date" : "Choose how to find a date"}>
               <button className="discovery-option random-option" onClick={() => drawRandomIdea(true)}>
-                <span className="discovery-option-icon">✳</span><span className="discovery-option-copy"><strong>{language === "pt" ? "Surpreendam-nos" : "Surprise us"}</strong><small>{language === "pt" ? "Sortear uma ideia de date" : "Draw a random date idea"}</small></span><span className="discovery-option-arrow">→</span>
+                <span className="discovery-option-icon"><Shuffle size={20} aria-hidden="true" /></span><span className="discovery-option-copy"><strong>{language === "pt" ? "Surpreendam-nos" : "Surprise us"}</strong><small>{language === "pt" ? "Sortear uma ideia de date" : "Draw a random date idea"}</small></span><ArrowRight className="discovery-option-arrow" size={18} aria-hidden="true" />
               </button>
               <button className="discovery-option feeling-option" onClick={beginFeeling}>
-                <span className="discovery-option-icon">♡</span><span className="discovery-option-copy"><strong>{language === "pt" ? "Escolher pelo feeling" : "Choose by feeling"}</strong><small>{language === "pt" ? "Respondam a algumas perguntas" : "Answer a few quick questions"}</small></span><span className="discovery-option-arrow">→</span>
+                <span className="discovery-option-icon"><SlidersHorizontal size={20} aria-hidden="true" /></span><span className="discovery-option-copy"><strong>{language === "pt" ? "Escolher pelo feeling" : "Choose by feeling"}</strong><small>{language === "pt" ? "Respondam a algumas perguntas" : "Answer a few quick questions"}</small></span><ArrowRight className="discovery-option-arrow" size={18} aria-hidden="true" />
               </button>
             </section>
-            <CoupleCompanion completedDates={completedStats.total} language={language} />
-            <WeatherPanel
-              language={language}
-              location={{
-                name: couple.weather_location_name,
-                latitude: couple.weather_latitude,
-                longitude: couple.weather_longitude,
-              }}
-              onSaveLocation={saveWeatherLocation}
-              onConditionChange={onWeatherConditionChange}
-              onForecastChange={onWeatherForecastChange}
-            />
-            <section className="proposal-card">
-              <span className="proposal-icon">💌</span>
-              <div><span className="banner-kicker">{language === "pt" ? "UMA PERGUNTA PEQUENA, UM GRANDE SIM" : "A LITTLE QUESTION, A BIG YES"}</span><h2>{language === "pt" ? "Ainda não lhe perguntaste?" : "Haven't asked them to be yours yet?"}</h2><p>{language === "pt" ? "Hoje pode ser o dia. Preparámos algo especial para ajudar." : "Make today the day. We made a little something to help you ask."}</p></div>
-              <a className="proposal-button" href="https://ricardosilva21a.github.io/valentine_marta/" target="_blank" rel="noopener noreferrer">{language === "pt" ? "Pergunta agora" : "Ask them now"} <span>↗</span></a>
-            </section>
-            <section className="milestones-card" aria-label={language === "pt" ? "Datas importantes" : "Your important dates"}>
-              <div className="milestones-heading"><span className="section-kicker">{language === "pt" ? "DATAS QUE SIGNIFICAM MUITO" : "THE LITTLE DATES THAT MEAN A LOT"}</span><h2>{language === "pt" ? "A vossa história até agora" : "Your story so far"}</h2></div>
-              {relationshipTime && <div className="relationship-duration">
-                <div className="relationship-duration-copy"><strong>{new Intl.NumberFormat(language === "pt" ? "pt-PT" : "en-GB", { maximumFractionDigits: 1 }).format(relationshipMetric === "days" ? relationshipTime.days : relationshipMetric === "months" ? relationshipTime.months : relationshipTime.years)}</strong><span>{language === "pt" ? relationshipMetric === "days" ? "dias juntos" : relationshipMetric === "months" ? "meses juntos" : "anos juntos" : relationshipMetric === "days" ? "days together" : relationshipMetric === "months" ? "months together" : "years together"}</span></div>
-                <div className="relationship-metric-switch" role="group" aria-label={language === "pt" ? "Métrica do tempo juntos" : "Time together metric"}>{(["days", "months", "years"] as const).map((metric) => <button key={metric} type="button" className={relationshipMetric === metric ? "selected" : ""} aria-pressed={relationshipMetric === metric} onClick={() => changeRelationshipMetric(metric)}>{language === "pt" ? ({ days: "Dias", months: "Meses", years: "Anos" } as Record<RelationshipMetric, string>)[metric] : metric[0].toLocaleUpperCase() + metric.slice(1)}</button>)}</div>
-              </div>}
-              {anniversary && <article className={`anniversary-feature${anniversaryGiftReminder ? " anniversary-gift-due" : ""}`}>
-                <div className="anniversary-heart" aria-hidden="true">♥</div>
-                <div className="anniversary-copy"><span className="anniversary-label">{language === "pt" ? "ANIVERSÁRIO DE NAMORO · DATA DO CASAL" : "RELATIONSHIP ANNIVERSARY · COUPLE DATE"}</span><h3>{anniversary.days === 0 ? (language === "pt" ? "Feliz aniversário de namoro!" : "Happy anniversary!") : anniversary.days === 1 ? (language === "pt" ? "É já amanhã!" : "It’s tomorrow!") : language === "pt" ? `Faltam ${anniversary.days} dias` : `${anniversary.days} days to go`}</h3><p>{formatDate(anniversary.date, language)}{anniversary.days === 0 ? "" : ` · ${anniversary.years} ${language === "pt" ? "anos juntos" : anniversary.years === 1 ? "year together" : "years together"}`}</p>
-                  {anniversaryGiftReminder && <div className="anniversary-gift-reminder"><strong>{language === "pt" ? "Está quase a chegar — já pensaram numa prenda?" : "It’s coming up — have you thought about a gift?"}</strong><span>{language === "pt" ? "Ideia: ofereçam uma experiência a dois, como um jantar especial ou uma escapadinha." : "Gift idea: plan an experience together, like a special dinner or a little getaway."}</span></div>}
-                </div>
-                <button type="button" className="anniversary-plan-button" onClick={startAnniversaryPlanning}>{language === "pt" ? "Planear date" : "Plan our date"} <span>→</span></button>
-              </article>}
-              {(couple.first_met_date || couple.first_message_date || couple.first_date_date) && <section className="milestone-group">
-                <div className="milestone-group-heading"><span className="section-kicker">{language === "pt" ? "DATAS DO CASAL" : "COUPLE MILESTONES"}</span><span>{language === "pt" ? "Momentos importantes da vossa história" : "Important moments in your story together"}</span></div>
-                <div className="milestones-list">
-                  {couple.first_met_date && <article className="milestone-card"><i>✦</i><span>{language === "pt" ? "Conheceram-se" : "First met"}</span><strong>{formatDate(couple.first_met_date, language)}</strong></article>}
-                  {couple.first_message_date && <article className="milestone-card"><i>✉</i><span>{language === "pt" ? "Primeira mensagem" : "First message"}</span><strong>{formatDate(couple.first_message_date, language)}</strong></article>}
-                  {couple.first_date_date && <article className="milestone-card"><i>♡</i><span>{language === "pt" ? "Primeiro date" : "First date"}</span><strong>{formatDate(couple.first_date_date, language)}</strong></article>}
-                </div>
-              </section>}
-              {personalBirthdays.length > 0 && <section className="milestone-group personal-milestones">
-                <div className="milestone-group-heading"><span className="section-kicker">{language === "pt" ? "DATAS PESSOAIS" : "PERSONAL DATES"}</span><span>{language === "pt" ? "Aniversários de cada pessoa" : "Each person's birthday"}</span></div>
-                <div className="milestones-list">{personalBirthdays.map((birthday) => <article className="milestone-card personal-milestone-card" key={birthday.name}><i>✿</i><span>{language === "pt" ? `Aniversário de ${birthday.name}` : `${birthday.name}'s birthday`}</span><strong>{formatDate(birthday.date, language, { day: "numeric", month: "long" })}{birthday.days === 0 ? language === "pt" ? " · Hoje" : " · Today" : birthday.days <= 30 ? language === "pt" ? ` · daqui a ${birthday.days} dias` : ` · in ${birthday.days} days` : ""}</strong></article>)}</div>
-              </section>}
-            </section>
+          </>}
+          {view === "insights" && <>
+          <section className="milestones-card" aria-label={language === "pt" ? "Datas importantes" : "Your important dates"}>
+            <div className="milestones-heading"><span className="section-kicker">{language === "pt" ? "DATAS QUE SIGNIFICAM MUITO" : "THE LITTLE DATES THAT MEAN A LOT"}</span><h2>{language === "pt" ? "A vossa história até agora" : "Your story so far"}</h2></div>
+            {relationshipTime && <div className="relationship-duration">
+              <div className="relationship-duration-copy"><strong>{new Intl.NumberFormat(language === "pt" ? "pt-PT" : "en-GB", { maximumFractionDigits: 1 }).format(relationshipMetric === "days" ? relationshipTime.days : relationshipMetric === "months" ? relationshipTime.months : relationshipTime.years)}</strong><span>{language === "pt" ? relationshipMetric === "days" ? "dias juntos" : relationshipMetric === "months" ? "meses juntos" : "anos juntos" : relationshipMetric === "days" ? "days together" : relationshipMetric === "months" ? "months together" : "years together"}</span></div>
+              <div className="relationship-metric-switch" role="group" aria-label={language === "pt" ? "Métrica do tempo juntos" : "Time together metric"}>{(["days", "months", "years"] as const).map((metric) => <button key={metric} type="button" className={relationshipMetric === metric ? "selected" : ""} aria-pressed={relationshipMetric === metric} onClick={() => changeRelationshipMetric(metric)}>{language === "pt" ? ({ days: "Dias", months: "Meses", years: "Anos" } as Record<RelationshipMetric, string>)[metric] : metric[0].toLocaleUpperCase() + metric.slice(1)}</button>)}</div>
+            </div>}
+            {anniversary && <article className={`anniversary-feature${anniversaryGiftReminder ? " anniversary-gift-due" : ""}`}>
+              <div className="anniversary-heart" aria-hidden="true">♥</div>
+              <div className="anniversary-copy"><span className="anniversary-label">{language === "pt" ? "ANIVERSÁRIO DE NAMORO · DATA DO CASAL" : "RELATIONSHIP ANNIVERSARY · COUPLE DATE"}</span><h3>{anniversary.days === 0 ? (language === "pt" ? "Feliz aniversário de namoro!" : "Happy anniversary!") : anniversary.days === 1 ? (language === "pt" ? "É já amanhã!" : "It’s tomorrow!") : language === "pt" ? `Faltam ${anniversary.days} dias` : `${anniversary.days} days to go`}</h3><p>{formatDate(anniversary.date, language)}{anniversary.days === 0 ? "" : ` · ${anniversary.years} ${language === "pt" ? "anos juntos" : anniversary.years === 1 ? "year together" : "years together"}`}</p>
+                {anniversaryGiftReminder && <div className="anniversary-gift-reminder"><strong>{language === "pt" ? "Está quase a chegar — já pensaram numa prenda?" : "It’s coming up — have you thought about a gift?"}</strong><span>{language === "pt" ? "Ideia: ofereçam uma experiência a dois, como um jantar especial ou uma escapadinha." : "Gift idea: plan an experience together, like a special dinner or a little getaway."}</span></div>}
+              </div>
+              <button type="button" className="anniversary-plan-button" onClick={startAnniversaryPlanning}>{language === "pt" ? "Planear date" : "Plan our date"} <span>→</span></button>
+            </article>}
+            {(couple.first_met_date || couple.first_message_date || couple.first_date_date) && <section className="milestone-group">
+              <div className="milestone-group-heading"><span className="section-kicker">{language === "pt" ? "DATAS DO CASAL" : "COUPLE MILESTONES"}</span><span>{language === "pt" ? "Momentos importantes da vossa história" : "Important moments in your story together"}</span></div>
+              <div className="milestones-list">
+                {couple.first_met_date && <article className="milestone-card"><i>✦</i><span>{language === "pt" ? "Conheceram-se" : "First met"}</span><strong>{formatDate(couple.first_met_date, language)}</strong></article>}
+                {couple.first_message_date && <article className="milestone-card"><i>✉</i><span>{language === "pt" ? "Primeira mensagem" : "First message"}</span><strong>{formatDate(couple.first_message_date, language)}</strong></article>}
+                {couple.first_date_date && <article className="milestone-card"><i>♡</i><span>{language === "pt" ? "Primeiro date" : "First date"}</span><strong>{formatDate(couple.first_date_date, language)}</strong></article>}
+              </div>
+            </section>}
+            {personalBirthdays.length > 0 && <section className="milestone-group personal-milestones">
+              <div className="milestone-group-heading"><span className="section-kicker">{language === "pt" ? "DATAS PESSOAIS" : "PERSONAL DATES"}</span><span>{language === "pt" ? "Aniversários de cada pessoa" : "Each person's birthday"}</span></div>
+              <div className="milestones-list">{personalBirthdays.map((birthday) => <article className="milestone-card personal-milestone-card" key={birthday.name}><i>✿</i><span>{language === "pt" ? `Aniversário de ${birthday.name}` : `${birthday.name}'s birthday`}</span><strong>{formatDate(birthday.date, language, { day: "numeric", month: "long" })}{birthday.days === 0 ? language === "pt" ? " · Hoje" : " · Today" : birthday.days <= 30 ? language === "pt" ? ` · daqui a ${birthday.days} dias` : ` · in ${birthday.days} days` : ""}</strong></article>)}</div>
+            </section>}
+          </section>
           </>}
 
-          <section className="stats-row" aria-label={language === "pt" ? "Resumo dos vossos dates" : "Your date summary"}><div className="stat-card"><span className="stat-icon lavender">✳</span><div><strong>{counts.ideas}</strong><span>{language === "pt" ? "ideias para experimentar" : "ideas to try"}</span></div><span className="stat-arrow">↗</span></div><div className="stat-card"><span className="stat-icon peach">▦</span><div><strong>{counts.planned}</strong><span>{language === "pt" ? "dates planeados" : "dates planned"}</span></div><span className="stat-arrow">↗</span></div><div className="stat-card"><span className="stat-icon green">♡</span><div><strong>{counts.completed}</strong><span>{language === "pt" ? "momentos vividos" : "moments lived"}</span></div><span className="stat-arrow">↗</span></div></section>
 
           {(view === "calendar" || view === "map") && <div className="date-view-filters">
-            <label className="search-box"><span aria-hidden="true">⌕</span><input aria-label={language === "pt" ? "Pesquisar dates" : "Search dates"} placeholder={language === "pt" ? "Procurar date ou local..." : "Find a date or place..."} value={search} onChange={(event) => setSearch(event.target.value)} /></label>
-            <div className="filters" aria-label={language === "pt" ? "Filtrar dates por categoria" : "Filter dates by category"}>{categories.map((item) => <button key={item} className={`filter-chip ${category === item ? "selected" : ""}`} onClick={() => setCategory(item)}>{item === "All" && <span className="filter-sparkle">✳</span>}{language === "pt" ? ({ All: "Todos", Romantic: "Romântico", Adventure: "Aventura", "Food & drink": "Comida e bebida", Creative: "Criativo", Relaxing: "Relaxante", Culture: "Cultura" } as Record<Category | "All", string>)[item] : item}</button>)}</div>
+            <label className="search-box"><Search size={16} aria-hidden="true" /><input aria-label={language === "pt" ? "Pesquisar dates" : "Search dates"} placeholder={language === "pt" ? "Procurar date ou local..." : "Find a date or place..."} value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+            <div className="filters" aria-label={language === "pt" ? "Filtrar dates por categoria" : "Filter dates by category"}>{categories.map((item) => <button key={item} className={`filter-chip ${category === item ? "selected" : ""}`} onClick={() => setCategory(item)}>{language === "pt" ? ({ All: "Todos", Romantic: "Romântico", Adventure: "Aventura", "Food & drink": "Comida e bebida", Creative: "Criativo", Relaxing: "Relaxante", Culture: "Cultura" } as Record<Category | "All", string>)[item] : item}</button>)}</div>
           </div>}
 
           {view === "calendar" && <CalendarView ideas={visibleIdeas} language={language} />}
-          {view === "schedule" && <SchedulePanel couple={couple} mySlot={mySlot} plannedDates={plannedDates} language={language} onFindDate={() => navigateView("discover")} />}
+          {view === "schedule" && <SchedulePanel couple={couple} mySlot={mySlot} plannedDates={plannedDates} blocks={workBlocks} onBlocksChange={setWorkBlocks} language={language} onFindDate={() => navigateView("discover")} />}
           {view === "map" && <Suspense fallback={<div className="map-loading">{language === "pt" ? "A abrir o mapa…" : "Opening the map…"}</div>}><LazyMapView
             ideas={visibleIdeas}
             language={language}
@@ -1672,21 +1724,20 @@ function App() {
               : <div className="insights-profile"><span className="section-kicker">{language === "pt" ? "O VOSSO PERFIL DE CASAL" : "YOUR COUPLE PROFILE"}</span><h2>{language === "pt" ? `São um casal ${completedMoodStats.top.map((stat) => ({ Romantic: "romântico", Fun: "divertido", Relaxing: "tranquilo", Adventure: "aventureiro", Creative: "criativo" })[stat.mood as Exclude<Mood, "Surprise me">]).join(" e ")}` : `You’re a ${completedMoodStats.top.map((stat) => stat.mood).join(" & ")} couple`}</h2><p>{language === "pt" ? `Com base nos vossos ${completedMoodStats.total} dates concluídos, estes são os vossos moods mais frequentes:` : `Based on your ${completedMoodStats.total} completed dates, you’ve shared these kinds of moments the most:`}</p><div className="insights-moods">{completedMoodStats.moods.map((stat) => <div className="insights-mood" key={stat.mood}><div><strong>{language === "pt" ? ({ Romantic: "Romântico", Fun: "Divertido", Relaxing: "Relaxante", Adventure: "Aventura", Creative: "Criativo", "Surprise me": "Surpreendam-nos" } as Record<Mood, string>)[stat.mood] : stat.mood}</strong><span>{stat.count} {language === "pt" ? stat.count === 1 ? "date" : "dates" : stat.count === 1 ? "date" : "dates"}</span></div><div className="insights-progress" aria-hidden="true"><span style={{ width: `${stat.count / completedMoodStats.total * 100}%` }} /></div></div>)}</div></div>}
           </section>}
 
-          {view !== "calendar" && view !== "map" && view !== "insights" && view !== "schedule" && <section className="ideas-section">
-            <div className="section-heading"><div><p className="section-kicker">{view === "planned" ? language === "pt" ? "A CAMINHO" : "COMING UP" : view === "memories" ? language === "pt" ? "O VOSSO ÁLBUM" : "YOUR LITTLE ALBUM" : language === "pt" ? "ESCOLHIDO A PENSAR NOS DOIS" : "PICKED WITH THE TWO OF YOU IN MIND"}</p><h2>{view === "planned" ? language === "pt" ? "Os vossos próximos dates" : "Your upcoming dates" : view === "memories" ? language === "pt" ? "Momentos que viveram juntos" : "Moments you've shared" : view === "favorites" ? language === "pt" ? "Guardados com carinho" : "Saved with love" : language === "pt" ? "Ideias para desfrutarem juntos" : "Ideas to enjoy together"} <span className="heading-count">{visibleIdeas.length}</span></h2></div><label className="search-box"><span aria-hidden="true">⌕</span><input aria-label={language === "pt" ? "Pesquisar ideias de date" : "Search date ideas"} placeholder={language === "pt" ? "Encontrar uma ideia..." : "Find an idea..."} value={search} onChange={(event) => setSearch(event.target.value)} /><kbd>⌘ K</kbd></label></div>
-            <div className="filters" aria-label={language === "pt" ? "Filtrar por categoria" : "Filter by category"}>{categories.map((item) => <button key={item} className={`filter-chip ${category === item ? "selected" : ""}`} onClick={() => setCategory(item)}>{item === "All" && <span className="filter-sparkle">✳</span>}{language === "pt" ? ({ All: "Todos", Romantic: "Romântico", Adventure: "Aventura", "Food & drink": "Comida e bebida", Creative: "Criativo", Relaxing: "Relaxante", Culture: "Cultura" } as Record<Category | "All", string>)[item] : item}</button>)}</div>
+          {view !== "today" && view !== "calendar" && view !== "map" && view !== "insights" && view !== "schedule" && <section className="ideas-section">
+            <div className="section-heading"><div><p className="section-kicker">{view === "planned" ? language === "pt" ? "A CAMINHO" : "COMING UP" : view === "memories" ? language === "pt" ? "O VOSSO ÁLBUM" : "YOUR LITTLE ALBUM" : language === "pt" ? "ESCOLHIDO A PENSAR NOS DOIS" : "PICKED WITH THE TWO OF YOU IN MIND"}</p><h2>{view === "planned" ? language === "pt" ? "Os vossos próximos dates" : "Your upcoming dates" : view === "memories" ? language === "pt" ? "Momentos que viveram juntos" : "Moments you've shared" : view === "favorites" ? language === "pt" ? "Guardados com carinho" : "Saved with love" : language === "pt" ? "Ideias para desfrutarem juntos" : "Ideas to enjoy together"} <span className="heading-count">{visibleIdeas.length}</span></h2></div><label className="search-box"><Search size={16} aria-hidden="true" /><input aria-label={language === "pt" ? "Pesquisar ideias de date" : "Search date ideas"} placeholder={language === "pt" ? "Encontrar uma ideia..." : "Find an idea..."} value={search} onChange={(event) => setSearch(event.target.value)} /></label></div>
+            <div className="filters" aria-label={language === "pt" ? "Filtrar por categoria" : "Filter by category"}>{categories.map((item) => <button key={item} className={`filter-chip ${category === item ? "selected" : ""}`} onClick={() => setCategory(item)}>{language === "pt" ? ({ All: "Todos", Romantic: "Romântico", Adventure: "Aventura", "Food & drink": "Comida e bebida", Creative: "Criativo", Relaxing: "Relaxante", Culture: "Cultura" } as Record<Category | "All", string>)[item] : item}</button>)}</div>
 
             {visibleIdeas.length > 0 ? <><div className="idea-grid">
               {visibleIdeas.slice(0, visibleIdeaLimit).map((idea, index) => <article className="idea-card" key={idea.id} style={{ animationDelay: `${index * 45}ms` }}>
-                <div className={`idea-art art-${index % 6}`}><span className="idea-emoji">{idea.emoji}</span><span className="category-label">{language === "pt" ? ({ Romantic: "Romântico", Adventure: "Aventura", "Food & drink": "Comida e bebida", Creative: "Criativo", Relaxing: "Relaxante", Culture: "Cultura" } as Record<Category, string>)[idea.category] : idea.category}</span>{!idea.is_own_idea && <span className="default-idea-label">{language === "pt" ? "PREDEFINIDA" : "DEFAULT"}</span>}<button className={`favorite-button ${idea.favorite ? "is-favorite" : ""}`} aria-label={idea.favorite ? language === "pt" ? "Remover dos favoritos" : "Remove from favourites" : language === "pt" ? "Adicionar aos favoritos" : "Add to favourites"} onClick={() => void toggleFavorite(idea.id)}>{idea.favorite ? "♥" : "♡"}</button>{idea.status === "planned" && <span className="planned-label">{language === "pt" ? "PLANEADO" : "PLANNED"}</span>}{idea.status === "completed" && <span className="completed-label">{language === "pt" ? "FEITO ✓" : "LIVED ✓"}</span>}</div>
-                <div className="idea-body"><div className="idea-title-row"><h3>{idea.title}</h3>{idea.is_own_idea && <div className="idea-management"><button type="button" aria-label={language === "pt" ? `Editar ${idea.title}` : `Edit ${idea.title}`} title={language === "pt" ? "Editar ideia" : "Edit idea"} onClick={() => openEditIdea(idea)}>✎</button><button type="button" aria-label={language === "pt" ? `Apagar ${idea.title}` : `Delete ${idea.title}`} title={language === "pt" ? "Apagar ideia" : "Delete idea"} onClick={() => { setActiveIdeaId(idea.id); setModal("delete"); }}>×</button></div>}</div><p className="idea-description">{idea.description}</p>{idea.planned_for && <p className="planned-date">▦ {formatDate(idea.planned_for, language)}{idea.planned_start_time ? ` · ${idea.planned_start_time.slice(0, 5)}` : ""}</p>}
+                <div className={`idea-art art-${index % 6}`}><span className="idea-emoji">{idea.emoji}</span><span className="category-label">{language === "pt" ? ({ Romantic: "Romântico", Adventure: "Aventura", "Food & drink": "Comida e bebida", Creative: "Criativo", Relaxing: "Relaxante", Culture: "Cultura" } as Record<Category, string>)[idea.category] : idea.category}</span><button className={`favorite-button ${idea.favorite ? "is-favorite" : ""}`} aria-label={idea.favorite ? language === "pt" ? "Remover dos favoritos" : "Remove from favourites" : language === "pt" ? "Adicionar aos favoritos" : "Add to favourites"} onClick={() => void toggleFavorite(idea.id)}><Bookmark size={17} fill={idea.favorite ? "currentColor" : "none"} aria-hidden="true" /></button>{idea.status === "planned" && <span className="planned-label">{language === "pt" ? "PLANEADO" : "PLANNED"}</span>}{idea.status === "completed" && <span className="completed-label">{language === "pt" ? "FEITO" : "DONE"}</span>}</div>
+                <div className="idea-body"><div className="idea-title-row"><h3>{idea.title}</h3>{idea.is_own_idea && <div className="idea-management"><button type="button" aria-label={language === "pt" ? `Editar ${idea.title}` : `Edit ${idea.title}`} title={language === "pt" ? "Editar ideia" : "Edit idea"} onClick={() => openEditIdea(idea)}><Pencil size={15} aria-hidden="true" /></button><button type="button" aria-label={language === "pt" ? `Apagar ${idea.title}` : `Delete ${idea.title}`} title={language === "pt" ? "Apagar" : "Delete"} onClick={() => { setActiveIdeaId(idea.id); setModal("delete"); }}><Trash2 size={15} aria-hidden="true" /></button></div>}</div><p className="idea-description">{idea.description}</p>{idea.planned_for && <p className="planned-date"><CalendarDays size={15} aria-hidden="true" />{formatDate(idea.planned_for, language)}{idea.planned_start_time ? ` · ${idea.planned_start_time.slice(0, 5)}` : ""}</p>}
                   {view === "memories" && (idea.memory || idea.location_name || idea.rating) && <div className="memory-details">{idea.rating && <span aria-label={`${idea.rating} out of 5 stars`}>{"★".repeat(idea.rating)}{"☆".repeat(5 - idea.rating)}</span>}{idea.location_name && <span>⌖ {idea.location_name}</span>}{idea.memory && <p>{idea.memory}</p>}</div>}
-                  <div className="idea-footer"><div className="idea-meta"><span>◷ {idea.duration}</span><i /><span>{idea.budget}</span></div>{idea.status === "idea" ? <button className="card-action" disabled={busy} onClick={() => void planForToday(idea)}>{language === "pt" ? "Planear para hoje" : "Plan for today"} <span>＋</span></button> : idea.status === "planned" ? <button className="card-action done-action" disabled={busy} onClick={() => void markCompleted(idea.id)}>{language === "pt" ? "Fizemos!" : "We did it"} <span>✓</span></button> : <div className="memory-card-actions"><button className="card-action album-action" disabled={busy} onClick={() => void openAlbum(idea)}>{language === "pt" ? "Álbum" : "Album"} ({photos.filter((photo) => photo.date_id === idea.id).length})</button><button className="card-action" disabled={busy} onClick={() => editCompletedHomeLocation(idea)}>{idea.home_partner ? language === "pt" ? "Alterar casa" : "Change home" : language === "pt" ? "Definir casa" : "Set home"}</button><button className="card-action undo-action" disabled={busy} onClick={() => openPlan(idea)}>{language === "pt" ? "Planear de novo" : "Plan again"} <span>↗</span></button></div>}</div>
+                  <div className="idea-footer"><div className="idea-meta"><Clock size={14} aria-hidden="true" /><span>{idea.duration}</span><i /><span>{idea.budget}</span></div>{idea.status === "idea" ? <button className="card-action" disabled={busy} onClick={() => openPlan(idea)}>{language === "pt" ? "Marcar" : "Plan"}</button> : idea.status === "planned" ? <button className="card-action done-action" disabled={busy} onClick={() => void markCompleted(idea.id)}><Check size={15} aria-hidden="true" />{language === "pt" ? "Já fizemos" : "We did it"}</button> : <div className="memory-card-actions"><button className="card-action album-action" disabled={busy} onClick={() => void openAlbum(idea)}>{language === "pt" ? "Álbum" : "Album"} ({photos.filter((photo) => photo.date_id === idea.id).length})</button><button className="card-action" disabled={busy} onClick={() => editCompletedHomeLocation(idea)}>{idea.home_partner ? language === "pt" ? "Alterar casa" : "Change home" : language === "pt" ? "Definir casa" : "Set home"}</button><button className="card-action undo-action" disabled={busy} onClick={() => openPlan(idea)}>{language === "pt" ? "Repetir" : "Plan again"}</button></div>}</div>
                 </div>
               </article>)}
             </div>{visibleIdeas.length > visibleIdeaLimit && <button type="button" className="show-more-ideas" onClick={() => setVisibleIdeaLimit((limit) => limit + 60)}>{language === "pt" ? `Mostrar mais ideias (${visibleIdeas.length - visibleIdeaLimit} restantes)` : `Show more ideas (${visibleIdeas.length - visibleIdeaLimit} left)`}</button>}</> : <div className="empty-state"><span>♡</span><h3>{language === "pt" ? "Ainda não há dates por aqui" : "No dates here just yet"}</h3><p>{view === "favorites" ? language === "pt" ? "Guardem as vossas ideias favoritas para as encontrarem aqui." : "Save your favourite ideas and they'll be waiting here." : language === "pt" ? "Experimentem outra categoria ou adicionem uma ideia." : "Try another category or add an idea of your own."}</p><button className="add-button" onClick={() => setModal("new")}>＋ {language === "pt" ? "Adicionar ideia" : "Add an idea"}</button></div>}
           </section>}
-          <footer className="page-footer"><span>{language === "pt" ? "Feito com carinho, para vocês os dois" : "Made with love, for the two of you"} <span className="tiny-heart">♥</span></span><span>{language === "pt" ? "UM DIA DE CADA VEZ · SEMPRE JUNTOS" : "ONE DAY AT A TIME · ALWAYS TOGETHER"}</span></footer>
         </div>
       </main>
 
