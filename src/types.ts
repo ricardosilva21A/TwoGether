@@ -43,6 +43,7 @@ export type DateDetails = {
   latitude: number | null;
   longitude: number | null;
   home_partner: HomePartner | null;
+  place_id: string | null;
 };
 
 export type CoupleDate = DateDetails & {
@@ -91,4 +92,28 @@ export type GeocodedPlace = {
   displayName: string;
   latitude: number;
   longitude: number;
+};
+
+export type PlaceKind = "restaurant" | "cafe" | "bar";
+
+// A place the couple saved from Google Maps; ratings and photos are fetched live.
+export type CouplePlace = {
+  id: string;
+  couple_id: string;
+  google_place_id: string;
+  name: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+  kind: PlaceKind;
+  notes: string;
+  created_at: string;
+};
+
+export type PlaceRating = {
+  place_id: string;
+  partner_slot: HomePartner;
+  rating: number;
+  comment: string;
+  updated_at: string;
 };

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { ArrowRight, CalendarDays, Check, Clock, MapPin, Shuffle } from "lucide-react";
+import { ArrowRight, CalendarDays, Check, Clock, MapPin, Shuffle, UtensilsCrossed } from "lucide-react";
 import type { DateIdea } from "./types";
 import { describeWindows } from "./SchedulePanel";
 import type { sharedFreeDays } from "./SchedulePanel";
@@ -35,6 +35,7 @@ export function TodayView({
   onOpenIdeas,
   onOpenPlanned,
   onOpenAgenda,
+  onOpenPlaces,
 }: {
   language: Language;
   upcomingDates: DateIdea[];
@@ -54,6 +55,7 @@ export function TodayView({
   onOpenIdeas: () => void;
   onOpenPlanned: () => void;
   onOpenAgenda: () => void;
+  onOpenPlaces: () => void;
 }) {
   const pt = language === "pt";
   const now = new Date();
@@ -101,7 +103,7 @@ export function TodayView({
       </section>
 
       <section className="panel today-quick-add" aria-label={pt ? "Marcar um date" : "Plan a date"}>
-        <p className="panel-label">{pt ? "Marcar um date" : "Plan a date"}</p>
+        <div className="panel-heading"><p className="panel-label">{pt ? "Marcar um date" : "Plan a date"}</p><button type="button" className="button button-ghost" onClick={onOpenPlaces}><UtensilsCrossed size={16} aria-hidden="true" />{pt ? "Jantar fora" : "Eat out"}</button></div>
         <form onSubmit={(event) => void submit(event)}>
           <input className="form-input" required maxLength={120} aria-label={pt ? "O que vão fazer" : "What you'll do"} placeholder={pt ? "O que vão fazer? ex.: Jantar no Taberna" : "What will you do? e.g. Dinner at Taberna"} value={title} onChange={(event) => setTitle(event.target.value)} />
           <div className="chip-row" role="group" aria-label={pt ? "Dia" : "Day"}>
