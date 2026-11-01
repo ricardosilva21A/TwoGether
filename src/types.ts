@@ -35,6 +35,7 @@ export type Idea = IdeaDetails & {
 
 export type DateDetails = {
   planned_for: string | null;
+  planned_start_time: string | null;
   completed_at: string | null;
   memory: string | null;
   rating: number | null;
@@ -60,6 +61,30 @@ export type DateIdea = IdeaDetails & DateDetails & {
   status: Status;
   favorite: boolean;
   is_own_idea: boolean;
+};
+
+// weekday follows ISO 8601 (1 = Monday). ends_at before starts_at means the shift ends the next day.
+export type WorkScheduleBlock = {
+  id: string;
+  couple_id: string;
+  partner_slot: HomePartner;
+  weekday: number;
+  starts_at: string;
+  ends_at: string;
+  created_at: string;
+};
+
+// assigned_to null means the task is for both partners.
+export type CoupleTask = {
+  id: string;
+  couple_id: string;
+  title: string;
+  notes: string;
+  due_date: string | null;
+  due_time: string | null;
+  assigned_to: HomePartner | null;
+  done_at: string | null;
+  created_at: string;
 };
 
 export type GeocodedPlace = {

@@ -57,6 +57,9 @@ The first release stores a couple profile, date ideas, locations, and photo-albu
 - Choose either partner's home as a planned or completed date location; statistics show the number of dates at home and which partner's home is most frequent.
 - Set or change the home location of a completed memory later from its Memories card without changing its date or other details.
 - A monthly calendar showing planned dates and completed memories, with unscheduled plans listed separately.
+- An Agenda page (`/agenda`) with each partner's fixed weekly work hours, the time you are both free over the next 7 days, and couple tasks that can belong to one partner or both.
+- Planned dates can have an optional start time.
+- A private calendar feed per partner (`/api/calendar?token=…`) to subscribe to in the iPhone Calendar (or any app that reads `.ics`). It carries planned dates, that partner's open tasks and shared ones, the anniversary and birthdays. The feed endpoint is a Vercel function that reads `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (or `SUPABASE_URL` / `SUPABASE_ANON_KEY`); times use the Europe/Lisbon time zone.
 - An OpenStreetMap view for planned and completed dates. Choose a place from search results to save a private map pin.
 - A weather panel with a seven-day forecast for a manually selected city or GPS location. On first use, the app asks before requesting GPS; the choice is saved to the couple's shared profile.
 - Activity-specific weather-aware random and Feeling recommendations that consider rain probability, feels-like temperatures, wind, UV, daylight, and sunshine for relevant activities such as hikes, picnics, beaches, and photography. Weather changes suggestion ranking and draw odds but never excludes an idea; rain is not treated as a blanket reason to stay indoors. A planned date shows its forecast when available.
