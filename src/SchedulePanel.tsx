@@ -47,7 +47,7 @@ function busyFromBlocks(blocks: WorkScheduleBlock[], weekday: number) {
   });
 }
 
-function freeWindows(busy: FreeWindow[], from: number) {
+export function freeWindows(busy: FreeWindow[], from: number) {
   const windows: FreeWindow[] = [];
   let cursor = from;
   for (const interval of [...busy].sort((first, second) => first.start - second.start)) {
@@ -59,9 +59,31 @@ function freeWindows(busy: FreeWindow[], from: number) {
   return windows.filter((window) => window.end - window.start >= shortestFreeWindow);
 }
 
-export function SchedulePanel({ couple, mySlot, plannedDates, language, onFindDate }: { couple: ScheduleCouple; mySlot: HomePartner | null; plannedDates: DateIdea[]; language: Language; onFindDate: () => void }) {
+// Shared free time for the next days, from both work schedules and timed planned dates.
+export function sharedFreeDays(blocks: WorkScheduleBlock[], plannedDates: DateIdea[], length = 7, now = new Date()) {
+  return Array.from({ length }, (_, offset) => {
+    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+    const key = localDateKey(day);
+    const busyIntervals = [
+      ...busyFromBlocks(blocks, isoWeekday(day)),
+      ...plannedDates.flatMap((date) => date.planned_for === key && date.planned_start_time
+        ? [{ start: minutesOf(date.planned_start_time), end: minutesOf(date.planned_start_time) + (date.duration_minutes ?? 120) }]
+        : []),
+    ];
+    const from = offset === 0 ? Math.max(dayStart, Math.ceil((now.getHours() * 60 + now.getMinutes()) / 15) * 15) : dayStart;
+    return { day, key, windows: freeWindows(busyIntervals, from), dates: plannedDates.filter((date) => date.planned_for === key) };
+  });
+}
+
+export function describeWindows(windows: FreeWindow[], language: Language) {
+  if (windows.length === 0) return language === "pt" ? "Sem tempo livre em comum" : "No shared free time";
+  if (windows.length === 1 && windows[0].start === dayStart && windows[0].end === dayEnd) return language === "pt" ? "Livres o dia todo" : "Free all day";
+  return windows.map((window) => `${clock(window.start)}–${clock(window.end)}`).join(" · ");
+}
+
+export function SchedulePanel({ couple, mySlot, plannedDates, blocks, onBlocksChange, language, onFindDate }: { couple: ScheduleCouple; mySlot: HomePartner | null; plannedDates: DateIdea[]; blocks: WorkScheduleBlock[]; onBlocksChange: (update: (current: WorkScheduleBlock[]) => WorkScheduleBlock[]) => void; language: Language; onFindDate: () => void }) {
   const pt = language === "pt";
-  const [blocks, setBlocks] = useState<WorkScheduleBlock[]>([]);
+  const setBlocks = onBlocksChange;
   const [tasks, setTasks] = useState<CoupleTask[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -82,35 +104,16 @@ export function SchedulePanel({ couple, mySlot, plannedDates, language, onFindDa
   useEffect(() => {
     if (!supabase) return;
     let active = true;
-    void Promise.all([
-      supabase.from("work_schedule_blocks").select("*").order("weekday").order("starts_at"),
-      supabase.from("couple_tasks").select("*").order("created_at"),
-    ]).then(([blockResult, taskResult]) => {
+    void supabase.from("couple_tasks").select("*").order("created_at").then((taskResult) => {
       if (!active) return;
-      const loadError = blockResult.error ?? taskResult.error;
-      if (loadError) setError(pt ? `Não foi possível carregar a agenda. Confirmem que a migration da fase 1 foi aplicada: ${loadError.message}` : `We couldn't load your schedule. Make sure the phase 1 migration has been applied: ${loadError.message}`);
-      setBlocks((blockResult.data ?? []) as WorkScheduleBlock[]);
+      if (taskResult.error) setError(pt ? `Não foi possível carregar as tarefas: ${taskResult.error.message}` : `We couldn't load your tasks: ${taskResult.error.message}`);
       setTasks((taskResult.data ?? []) as CoupleTask[]);
       setLoaded(true);
     });
     return () => { active = false; };
   }, [couple.id, pt]);
 
-  const nextDays = useMemo(() => {
-    const now = new Date();
-    return Array.from({ length: 7 }, (_, offset) => {
-      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
-      const key = localDateKey(day);
-      const busyIntervals = [
-        ...busyFromBlocks(blocks, isoWeekday(day)),
-        ...plannedDates.flatMap((date) => date.planned_for === key && date.planned_start_time
-          ? [{ start: minutesOf(date.planned_start_time), end: minutesOf(date.planned_start_time) + (date.duration_minutes ?? 120) }]
-          : []),
-      ];
-      const from = offset === 0 ? Math.max(dayStart, Math.ceil((now.getHours() * 60 + now.getMinutes()) / 15) * 15) : dayStart;
-      return { day, key, windows: freeWindows(busyIntervals, from), dates: plannedDates.filter((date) => date.planned_for === key) };
-    });
-  }, [blocks, plannedDates]);
+  const nextDays = useMemo(() => sharedFreeDays(blocks, plannedDates), [blocks, plannedDates]);
 
   const openTasks = useMemo(() => tasks.filter((task) => !task.done_at).sort((first, second) =>
     (first.due_date ?? "9999") .localeCompare(second.due_date ?? "9999") || (first.due_time ?? "").localeCompare(second.due_time ?? "") || first.created_at.localeCompare(second.created_at)), [tasks]);
@@ -216,11 +219,7 @@ export function SchedulePanel({ couple, mySlot, plannedDates, language, onFindDa
         <ul className="free-time-list">
           {nextDays.map(({ day, key, windows, dates }) => <li key={key}>
             <strong>{formatDay(day)}</strong>
-            <span>{windows.length === 0
-              ? pt ? "Sem tempo livre em comum" : "No shared free time"
-              : windows.length === 1 && windows[0].start === dayStart && windows[0].end === dayEnd
-                ? pt ? "Livres o dia todo" : "Free all day"
-                : windows.map((window) => `${clock(window.start)}–${clock(window.end)}`).join(" · ")}</span>
+            <span>{describeWindows(windows, language)}</span>
             {dates.map((date) => <em key={date.id}>{date.emoji} {date.title}{date.planned_start_time ? ` · ${date.planned_start_time.slice(0, 5)}` : ""}</em>)}
           </li>)}
         </ul>
